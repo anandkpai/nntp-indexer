@@ -1,11 +1,7 @@
 """Example: Create NZB files from stored database."""
 
 from pathlib import Path
-from nntp_lib import get_config, create_nzb_from_db
-
-def sanitize_filename(s: str) -> str:
-    """Make a string safe for use as a filename."""
-    return "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in s)
+from nntp_lib import get_config, create_nzb_from_db, sanitize_filename
 
 def main():
     """Create NZB files based on config filters."""

@@ -28,3 +28,7 @@ def to_iso(dt_str: str | None) -> str | None:
         return parsedate_to_datetime(dt_str).astimezone(tz=None).isoformat()
     except Exception:
         return None
+
+def sanitize_filename(s: str) -> str:
+    """Make a string safe for use as a filename."""
+    return "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in s)
