@@ -282,10 +282,27 @@ def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
         ORDER BY from_addr, subject, artnum
     """
     
+    # Build actual SQL with parameters substituted for display
+    display_sql = sql
+    for param in params:
+        # Format string params with quotes, numbers without
+        if isinstance(param, str):
+            display_sql = display_sql.replace('?', f"'{param}'", 1)
+        else:
+            display_sql = display_sql.replace('?', str(param), 1)
+    
+    print(f"\nExecuting SQL Query:")
+    print(display_sql)
+    print()
+    
+    start_time = time.time()
     print(f"Querying database...")
     cur.execute(sql, params)
     rows = [dict(r) for r in cur.fetchall()]
+    query_time = time.time() - start_time
     conn.close()
+    
+    print(f"Query execution time: {query_time:.4f} seconds")
     
     if not rows:
         print(f"No articles found")
