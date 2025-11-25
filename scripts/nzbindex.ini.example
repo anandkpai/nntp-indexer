@@ -38,6 +38,8 @@ not_from =
 output_path = /tmp/nntp-index/nzbs
 ; Require complete sets (no missing parts) for NZB creation
 require_complete_sets = false
+; Group articles by poster and collection name (creates separate NZB per collection)
+group_by_collection = true
 
 [debug]
 DEBUG = false
