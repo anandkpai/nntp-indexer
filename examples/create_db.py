@@ -10,7 +10,7 @@ import orjson
 
 # globals 
 config = get_config()
-TMP_ROWS_PATH_BASE = config.get('db', 'TMP_ROWS_PATH_BASE', fallback='/tmp/nntp_rows')
+ARCHIVE_ROWS_PATH_BASE = config.get('db', 'ARCHIVE_ROWS_PATH_BASE', fallback='/tmp/nntp_archive')
 
 def get_article_range(config: ConfigParser, group: str, local_min: int, local_max: int) -> tuple[int, int]:
     """
@@ -86,8 +86,8 @@ if __name__ == '__main__':
         print(f"Retrieved {len(rows):,} from {group}, Elapsed time for whole group = {end_time - start_time:.4f} seconds")        
         
         if rows:
-            cached_headers_file = f"{TMP_ROWS_PATH_BASE}/{group}.json"
-            os.makedirs(TMP_ROWS_PATH_BASE, exist_ok=True)
+            cached_headers_file = f"{ARCHIVE_ROWS_PATH_BASE}/{group}.json"
+            os.makedirs(ARCHIVE_ROWS_PATH_BASE, exist_ok=True)
             start_time = time.time()
             with open(cached_headers_file, "wb") as f:  # Open in binary mode for orjson
                 # Write all rows as NDJSON in one operation

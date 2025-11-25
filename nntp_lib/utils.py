@@ -3,10 +3,10 @@
 from configparser import ConfigParser
 from email.utils import parsedate_to_datetime
 
-def get_config(path: str = "config.ini") -> ConfigParser:
-    """Load configuration from INI file."""
+def get_config() -> ConfigParser:
+    """Load configuration from config.ini file."""
     config = ConfigParser()
-    config.read(path)
+    config.read("config.ini")
     return config
 
 def clean_text(s: str) -> str:

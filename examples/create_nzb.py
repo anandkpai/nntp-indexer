@@ -9,7 +9,7 @@ def sanitize_filename(s: str) -> str:
 
 def main():
     """Create NZB files based on config filters."""
-    config = get_config('config.ini')
+    config = get_config()
     
     groups = config['groups']['names'].split(',')
     DB_BASE_PATH = config['db']['DB_BASE_PATH']

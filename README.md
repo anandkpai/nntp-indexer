@@ -32,7 +32,7 @@ cp examples/config.ini.example config.ini
 from nntp_lib import get_config, fetch_headers_chunked, ensure_db, upsert_headers
 import sqlite3
 
-config = get_config('config.ini')
+config = get_config()
 group = 'alt.binaries.test'
 
 # Setup database
