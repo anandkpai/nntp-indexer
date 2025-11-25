@@ -324,18 +324,21 @@ def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
     # Create NZB for each collection
     results = []
     filename_counts = defaultdict(int)
+    skipped_count = 0
     
     for (poster, collection_name), articles in collections.items():
         # Group articles within this collection
         groups_dict, singles = group_rows_auto(articles)
         
         if not groups_dict and not singles:
+            skipped_count += 1
             continue
         
-        # Build NZB
+        # Build NZB (this will print messages about skipped incomplete sets)
         nzb_xml = build_nzb_xml(groups_dict, singles, group, require_complete_sets)
         
         if not nzb_xml or '<file' not in nzb_xml:
+            skipped_count += 1
             continue
         
         # Create filename from collection name and poster
@@ -354,5 +357,7 @@ def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
         results.append((filename, nzb_xml))
         print(f"  Created: {filename} ({len(articles)} articles)")
     
+    if skipped_count > 0:
+        print(f"\nSkipped {skipped_count} collections (empty or all incomplete sets)")
     print(f"\nTotal NZBs created: {len(results)}")
     return results
