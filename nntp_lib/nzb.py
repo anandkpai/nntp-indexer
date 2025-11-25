@@ -166,12 +166,17 @@ def create_nzb_from_db(db_path: str, group: str,
                 where.append("from_addr NOT LIKE ? COLLATE NOCASE")
                 params.append(f"%{term}%")
     
-    cur.execute(f"""
+    sql = f"""
         SELECT message_id, subject, from_addr, date_utc, bytes, artnum, group_name
         FROM articles
         WHERE {' AND '.join(where)}
         ORDER BY artnum
-    """, tuple(params))
+    """
+    
+    print(f"\nSQL Query:\n{sql}")
+    print(f"Parameters: {params}\n")
+    
+    cur.execute(sql, tuple(params))
     
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
