@@ -228,3 +228,114 @@ def create_nzb_from_db(db_path: str, group: str,
     print(f"Grouped into {len(groups_dict)} multi-part sets and {len(singles)} singles")
     
     return build_nzb_xml(groups_dict, singles, group, require_complete_sets)
+
+def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
+                                subject_like: str = None, from_like: str = None,
+                                not_subject: str = None, not_from: str = None,
+                                require_complete_sets: bool = False) -> list[tuple[str, str]]:
+    """Create separate NZB files grouped by poster and collection name.
+    
+    Returns:
+        List of (filename, nzb_xml) tuples for created NZBs
+    """
+    from collections import defaultdict
+    from .utils import normalize_subject_for_grouping, sanitize_filename
+    
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    where = ["group_name = ?"]
+    params = [group]
+    
+    if subject_like:
+        for term in subject_like.split('%'):
+            if term:
+                where.append("subject LIKE ? COLLATE NOCASE")
+                params.append(f"%{term}%")
+    
+    if from_like:
+        for term in from_like.split('%'):
+            if term:
+                where.append("from_addr LIKE ? COLLATE NOCASE")
+                params.append(f"%{term}%")
+    
+    if not_subject:
+        for term in not_subject.split('|'):
+            term = term.strip()
+            if term:
+                where.append("subject NOT LIKE ? COLLATE NOCASE")
+                params.append(f"%{term}%")
+    
+    if not_from:
+        for term in not_from.split('|'):
+            term = term.strip()
+            if term:
+                where.append("from_addr NOT LIKE ? COLLATE NOCASE")
+                params.append(f"%{term}%")
+    
+    where_clause = " AND ".join(where)
+    sql = f"""
+        SELECT message_id, subject, from_addr, date_utc, bytes, artnum, group_name
+        FROM articles
+        WHERE {where_clause}
+        ORDER BY from_addr, subject, artnum
+    """
+    
+    print(f"Querying database...")
+    cur.execute(sql, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    
+    if not rows:
+        print(f"No articles found")
+        return []
+    
+    print(f"Found {len(rows):,} articles")
+    
+    # Group by poster and normalized collection name
+    collections = defaultdict(list)
+    
+    for row in rows:
+        poster = row['from_addr']
+        normalized = normalize_subject_for_grouping(row['subject'], subject_like)
+        key = (poster, normalized)
+        collections[key].append(row)
+    
+    print(f"Grouped into {len(collections)} collections")
+    
+    # Create NZB for each collection
+    results = []
+    filename_counts = defaultdict(int)
+    
+    for (poster, collection_name), articles in collections.items():
+        # Group articles within this collection
+        groups_dict, singles = group_rows_auto(articles)
+        
+        if not groups_dict and not singles:
+            continue
+        
+        # Build NZB
+        nzb_xml = build_nzb_xml(groups_dict, singles, group, require_complete_sets)
+        
+        if not nzb_xml or '<file' not in nzb_xml:
+            continue
+        
+        # Create filename from collection name and poster
+        poster_clean = sanitize_filename(poster[:30])
+        collection_clean = sanitize_filename(collection_name[:50]) if collection_name else "misc"
+        
+        base_filename = f"{poster_clean}_{collection_clean}"
+        filename_counts[base_filename] += 1
+        
+        # Add counter if duplicate
+        if filename_counts[base_filename] > 1:
+            filename = f"{base_filename}_{filename_counts[base_filename]}.nzb"
+        else:
+            filename = f"{base_filename}.nzb"
+        
+        results.append((filename, nzb_xml))
+        print(f"  Created: {filename} ({len(articles)} articles)")
+    
+    print(f"\nTotal NZBs created: {len(results)}")
+    return results
