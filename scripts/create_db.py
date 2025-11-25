@@ -80,15 +80,31 @@ if __name__ == '__main__':
         print("Checking existing articles in database...")
         cur = conn.cursor()
         cur.execute("SELECT COALESCE(MAX(artnum), 0), COALESCE(MIN(artnum), 0) FROM articles WHERE group_name = ?", (group,))
-        local_max, local_min = cur.fetchone()
-        print(f"Current database range: {local_min:,} to {local_max:,}")
+        db_max, db_min = cur.fetchone()
+        print(f"Current database range: {db_min:,} to {db_max:,}")
 
-        # if a filter limit has been set, use that over the local max and local min. 
+        # Get server's current article range
+        print("Connecting to NNTP server to check available articles...")
+        temp_client = get_nntp_client(config)
+        server_max, server_min = temp_client.group(group)[1:3]
+        temp_client.quit()
+        print(f"Server article range: {server_min:,} to {server_max:,}")
+        
+        # Default: fetch new articles only (from db_max+1 to server_max)
+        local_min = db_max + 1 if db_max > 0 else server_min
+        local_max = server_max
+        
+        # Apply filter overrides if configured
         local_min, local_max = get_article_range(config, group, local_min, local_max)
         
-        total_to_fetch = local_max - local_min + 1 if local_max > local_min else 0
-        print(f"\nConnecting to NNTP server to retrieve headers...")
-        print(f"Article range: {local_min:,} to {local_max:,}")
+        # Check if there's anything to fetch
+        if local_min > local_max:
+            print(f"\n✓ Database is up to date. No new articles to fetch.")
+            conn.close()
+            continue
+        
+        total_to_fetch = local_max - local_min + 1
+        print(f"\nArticle range to fetch: {local_min:,} to {local_max:,}")
         print(f"Total headers to retrieve: {total_to_fetch:,}")
         print(f"Starting parallel fetch...\n")
 
