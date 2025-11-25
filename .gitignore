@@ -38,12 +38,12 @@ ENV/
 *.sqlite-shm
 *.json
 *.nzb
-config.ini
+nzbindex.ini
 headers-archive/
 nzbs/
 
 # Keep example config
-!examples/config.ini.example
+!examples/nzbindex.ini.example
 
 # OS
 .DS_Store
