@@ -43,7 +43,7 @@ def list_all_groups(save_to_db: bool = True):
             name, last, first, flag = group_info
             count = int(last) - int(first) + 1 if last and first else 0
             
-            print(f"{name:<50} {count:>12,} {int(first):>12,} {int(last):>12,} {flag:>6}")
+            # print(f"{name:<50} {count:>12,} {int(first):>12,} {int(last):>12,} {flag:>6}")
             
             groups_data.append({
                 'group_name': name,
