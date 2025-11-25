@@ -1,4 +1,5 @@
-from create_db_basic import get_config, get_nntp_client
+from nntp_lib.utils import get_config
+from nntp_lib.fetch import get_nntp_client
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timedelta, timezone
 import time
