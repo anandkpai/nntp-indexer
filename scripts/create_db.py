@@ -57,8 +57,15 @@ def get_article_range(config: ConfigParser, group: str, local_min: int, local_ma
 
 
 if __name__ == '__main__':
+    print("="*80)
+    print("NNTP Indexer - Creating/Updating Article Database")
+    print("="*80)
+    
     groups = config['groups']['names'].split(',')    
     DB_BASE_PATH = config['db']['DB_BASE_PATH']
+    
+    print(f"\nGroups to process: {', '.join(groups)}")
+    print(f"Database path: {DB_BASE_PATH}\n")
 
     for group in groups:
         db_path = f"{DB_BASE_PATH}/{group}.sqlite"
