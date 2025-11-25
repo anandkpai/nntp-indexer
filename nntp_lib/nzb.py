@@ -197,8 +197,18 @@ def create_nzb_from_db(db_path: str, group: str,
         ORDER BY artnum
     """
     
-    print(f"\nSQL Query:\n{sql}")
-    print(f"Parameters: {params}\n")
+    # Build actual SQL with parameters substituted for display
+    display_sql = sql
+    for param in params:
+        # Format string params with quotes, numbers without
+        if isinstance(param, str):
+            display_sql = display_sql.replace('?', f"'{param}'", 1)
+        else:
+            display_sql = display_sql.replace('?', str(param), 1)
+    
+    print(f"\nExecuting SQL Query:")
+    print(display_sql)
+    print()
     
     start_time = time.time()
     cur.execute(sql, tuple(params))
