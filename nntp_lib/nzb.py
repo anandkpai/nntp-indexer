@@ -100,10 +100,31 @@ def build_nzb_xml(groups_dict: dict, singles: list[dict], group_name: str,
     root = ET.Element("nzb", xmlns="http://www.newzbin.com/DTD/2003/nzb")
     
     for (base, m, poster), parts in groups_dict.items():
+        # Check if set is complete (has all parts)
         if require_complete_sets and len(parts) < m:
             continue
         if base.lower().endswith('.exe'):
             continue
+        
+        # Extract actual part numbers and check for gaps
+        part_numbers = set()
+        parts_with_numbers = []
+        for part in parts:
+            subj = part["subject"] or ""
+            # Try to extract part number from subject
+            nm = extract_nm_rightmost(subj) or extract_nm_leftmost(subj)
+            if nm:
+                n, _ = nm
+                part_numbers.add(n)
+                parts_with_numbers.append((n, part))
+        
+        # Check for gaps in part numbers
+        if part_numbers:
+            expected_parts = set(range(1, m + 1))
+            missing_parts = expected_parts - part_numbers
+            if missing_parts and require_complete_sets:
+                print(f"Skipping incomplete set '{base[:50]}...': missing parts {sorted(missing_parts)}")
+                continue
         
         file_el = ET.SubElement(root, "file", {
             "poster": poster,
@@ -115,12 +136,14 @@ def build_nzb_xml(groups_dict: dict, singles: list[dict], group_name: str,
         ET.SubElement(groups_el, "group").text = group_name
         
         segs_el = ET.SubElement(file_el, "segments")
-        parts_sorted = sorted(parts, key=lambda x: x["artnum"])
         
-        for seg_no, r in enumerate(parts_sorted, start=1):
+        # Sort by actual part number, not article number
+        parts_with_numbers.sort(key=lambda x: x[0])
+        
+        for part_num, r in parts_with_numbers:
             ET.SubElement(segs_el, "segment", {
                 "bytes": str(r["bytes"] or 0),
-                "number": str(seg_no)
+                "number": str(part_num)  # Use actual part number from subject
             }).text = message_id_text(r["message_id"])
     
     xml_str = ET.tostring(root, encoding='unicode')
