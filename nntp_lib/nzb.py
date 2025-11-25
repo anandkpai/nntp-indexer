@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+import time
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
@@ -176,10 +177,14 @@ def create_nzb_from_db(db_path: str, group: str,
     print(f"\nSQL Query:\n{sql}")
     print(f"Parameters: {params}\n")
     
+    start_time = time.time()
     cur.execute(sql, tuple(params))
     
     rows = [dict(r) for r in cur.fetchall()]
+    query_time = time.time() - start_time
     conn.close()
+    
+    print(f"Query execution time: {query_time:.4f} seconds")
     
     if not rows:
         print(f"No rows found for group='{group}'")
