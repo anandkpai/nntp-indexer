@@ -36,11 +36,11 @@ def main():
         )
         
         if nzb_xml:
-            filename_parts = [group]
+            filename_parts = []
             if subject_like:
                 filename_parts.append(sanitize_filename(subject_like[:30]))
             
-            filename = '_'.join(filename_parts) + '.nzb'
+            filename = '_'.join(filename_parts) + '.nzb' if filename_parts else 'output.nzb'
             output_file = f"{NZB_OUTPUT_PATH}/{filename}"
             
             with open(output_file, 'w', encoding='utf-8') as f:
