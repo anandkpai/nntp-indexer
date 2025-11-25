@@ -2,11 +2,16 @@
 
 from configparser import ConfigParser
 from email.utils import parsedate_to_datetime
+import os
+
+# Configuration constants
+CONFIG_BASE_PATH = os.getenv('CONFIG_BASE_PATH', '/mnt/r/tmp/nzbindex')
 
 def get_config() -> ConfigParser:
-    """Load configuration from config.ini file."""
+    """Load configuration from nzbindex.ini file."""
     config = ConfigParser()
-    config.read("config.ini")
+    config_path = f"{CONFIG_BASE_PATH}/nzbindex.ini"
+    config.read(config_path)
     return config
 
 def clean_text(s: str) -> str:

@@ -10,7 +10,7 @@ import orjson
 
 # globals 
 config = get_config()
-ARCHIVE_ROWS_PATH_BASE = config.get('db', 'ARCHIVE_ROWS_PATH_BASE', fallback='/tmp/nntp_archive')
+ARCHIVE_ROWS_PATH_BASE = f"{config.get('db', 'DB_BASE_PATH', fallback='/tmp/nntp_archive')}/headers-archive"
 
 def get_article_range(config: ConfigParser, group: str, local_min: int, local_max: int) -> tuple[int, int]:
     """
@@ -54,8 +54,6 @@ def get_article_range(config: ConfigParser, group: str, local_min: int, local_ma
                 print(f"Could not find articles in specified date range, using full range")
     
     return local_min, local_max
-
-
 
 
 if __name__ == '__main__':

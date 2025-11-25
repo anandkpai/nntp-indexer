@@ -22,8 +22,8 @@ pip install -e .
 ### 1. Create a config file
 
 ```bash
-cp examples/config.ini.example config.ini
-# Edit config.ini with your NNTP server details
+cp examples/nzbindex.ini.example nzbindex.ini
+# Edit nzbindex.ini with your NNTP server details
 ```
 
 ### 2. Fetch headers
@@ -70,7 +70,7 @@ with open('ubuntu.nzb', 'w') as f:
 
 ## Configuration
 
-See `examples/config.ini.example` for all available options.
+See `examples/nzbindex.ini.example` for all available options.
 
 Key settings:
 - `max_workers`: Number of parallel NNTP connections (5-20 recommended)
