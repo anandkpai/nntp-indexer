@@ -1,0 +1,42 @@
+[servers]
+host = news.example.com
+port = 563
+timeout = 60
+username = your_username
+password = your_password
+max_workers = 10
+ssl = 1
+
+[db]
+DB_BASE_PATH = /tmp/nntp-index
+
+[groups]
+names = alt.binaries.test
+
+[filters]
+; Subject must contain this pattern
+subject_like = 
+
+; Poster must contain this pattern
+from_like = 
+
+; Exclude subjects containing these (pipe-separated)
+not_subject = 
+
+; Exclude posters containing these (pipe-separated)
+not_from = 
+
+; Manual article range (optional)
+; local_min = 1000000
+; local_max = 2000000
+
+; Date-based range (optional)
+; min_days = 30
+; max_days = 60
+
+[nzb]
+output_path = /tmp/nntp-index/nzbs
+require_complete_sets = false
+
+[debug]
+DEBUG = false
