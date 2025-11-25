@@ -14,6 +14,15 @@ A Python library for fetching, storing, and searching Usenet (NNTP) article head
 ## Installation
 
 ```bash
+# Clone the repository
+git clone <repo-url>
+cd nntp-indexer
+
+# Create virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in editable mode
 pip install -e .
 ```
 
