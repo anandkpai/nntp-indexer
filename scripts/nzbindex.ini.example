@@ -36,7 +36,10 @@ not_from =
 
 [nzb]
 output_path = /tmp/nntp-index/nzbs
-require_complete_sets = false
 
 [debug]
 DEBUG = false
+
+[nzb]
+; Require complete sets (no missing parts) for NZB creation
+require_complete_sets = false
