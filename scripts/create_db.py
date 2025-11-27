@@ -72,7 +72,7 @@ if __name__ == '__main__':
         print(f"Processing group: {group}")
         print(f"{'='*80}")
         
-        db_path = f"{DB_BASE_PATH}/{group}.sqlite"
+        db_path = ":memory:"
         print(f"Opening database: {db_path}")
         conn = sqlite3.connect(db_path)
         
