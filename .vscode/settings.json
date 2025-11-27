@@ -1,0 +1,10 @@
+{
+	"terminal.integrated.env.linux": {
+		"SKIP_PYENV": "1"
+	},
+	"terminal.integrated.env.wsl": {
+		"SKIP_PYENV": "1"
+	},
+	"python.defaultInterpreterPath": "/home/ubuntu/nntp-indexer/venv/bin/python"
+}
+
