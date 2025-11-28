@@ -71,17 +71,24 @@ if __name__ == '__main__':
         print(f"\n{'='*80}")
         print(f"Processing group: {group}")
         print(f"{'='*80}")
-        
-        db_path = ":memory:"
-        print(f"Opening database: {db_path}")
-        conn = sqlite3.connect(db_path)
-        
-        ensure_db(conn)
-        print("Checking existing articles in database...")
-        cur = conn.cursor()
-        cur.execute("SELECT COALESCE(MAX(artnum), 0), COALESCE(MIN(artnum), 0) FROM articles WHERE group_name = ?", (group,))
-        db_max, db_min = cur.fetchone()
-        print(f"Current database range: {db_min:,} to {db_max:,}")
+
+        db_path = f"{DB_BASE_PATH}/{group}.sqlite"
+        disk_db_exists = os.path.exists(db_path)
+        if disk_db_exists:
+            print(f"Disk DB exists at {db_path}, upserting directly into disk DB...")
+            conn = sqlite3.connect(db_path)
+            ensure_db(conn)
+            # Get current max/min from disk DB
+            cur = conn.cursor()
+            cur.execute("SELECT COALESCE(MAX(artnum), 0), COALESCE(MIN(artnum), 0) FROM articles WHERE group_name = ?", (group,))
+            db_max, db_min = cur.fetchone()
+            print(f"Current disk DB range: {db_min:,} to {db_max:,}")
+            cur.close()
+        else:
+            print(f"No disk DB found for {group}, using in-memory DB and backing up to disk after upsert...")
+            conn = sqlite3.connect(':memory:')
+            ensure_db(conn)
+            db_max, db_min = 0, 0
 
         # Get server's current article range
         print("Connecting to NNTP server to check available articles...")
@@ -89,20 +96,20 @@ if __name__ == '__main__':
         server_max, server_min = temp_client.group(group)[1:3]
         temp_client.quit()
         print(f"Server article range: {server_min:,} to {server_max:,}")
-        
+
         # Default: fetch new articles only (from db_max+1 to server_max)
         local_min = db_max + 1 if db_max > 0 else server_min
         local_max = server_max
-        
+
         # Apply filter overrides if configured
         local_min, local_max = get_article_range(config, group, local_min, local_max)
-        
+
         # Check if there's anything to fetch
         if local_min > local_max:
-            print(f"\n✓ Database is up to date. No new articles to fetch.")
-            conn.close()
+            print(f"\n Database is up to date. No new articles to fetch.")
+            conn_mem.close()
             continue
-        
+
         total_to_fetch = local_max - local_min + 1
         print(f"\nArticle range to fetch: {local_min:,} to {local_max:,}")
         print(f"Total headers to retrieve: {total_to_fetch:,}")
@@ -111,33 +118,41 @@ if __name__ == '__main__':
         start_time = time.time()
         rows = fetch_headers_chunked(
             config=config,
-            group=group,
-            start=local_max,
-            back_filled_up_to=local_min
-        )
-        end_time = time.time()
-        print(f"\n✓ Retrieved {len(rows):,} headers in {end_time - start_time:.4f} seconds")        
-        
-        if rows:
-            cached_headers_file = f"{ARCHIVE_ROWS_PATH_BASE}/{group}.json"
-            os.makedirs(ARCHIVE_ROWS_PATH_BASE, exist_ok=True)
-            
-            print(f"\nArchiving headers to JSON...")
-            start_time = time.time()
-            with open(cached_headers_file, "wb") as f:  # Open in binary mode for orjson
-                # Write all rows as NDJSON in one operation
-                f.write(b'\n'.join(orjson.dumps(row) for row in rows))
-                f.write(b'\n')        
+            if rows:
+                cached_headers_file = f"{ARCHIVE_ROWS_PATH_BASE}/{group}.json"
+                os.makedirs(ARCHIVE_ROWS_PATH_BASE, exist_ok=True)
+
+                print(f"\nArchiving headers to JSON...")
+                start_time = time.time()
+                with open(cached_headers_file, "wb") as f:  # Open in binary mode for orjson
+                    f.write(b'\n'.join(orjson.dumps(row) for row in rows))
+                    f.write(b'\n')
+                end_time = time.time()
+                print(f"\u2713 Wrote {len(rows):,} rows to {cached_headers_file} in {end_time - start_time:.4f} seconds")
+
+                print(f"\nInserting headers into database...")
+                start_time = time.time()
+                upsert_headers(conn, group, rows)
+                end_time = time.time()
+                print(f"\u2713 Upserted {len(rows):,} headers into DB in {end_time - start_time:.4f} seconds")
+
+                if not disk_db_exists:
+                    print(f"\nBacking up in-memory DB to disk DB at {db_path}...")
+                    start_time = time.time()
+                    conn_disk = sqlite3.connect(db_path)
+                    conn.backup(conn_disk)
+                    conn_disk.close()
+                    end_time = time.time()
+                    print(f"\u2713 Backed up in-memory DB to disk DB in {end_time - start_time:.4f} seconds")
+            else:
+                print("\nNo new headers to process.")
+
+            conn.close()
+            print(f"\n\u2713 Completed processing for {group}")
             end_time = time.time()
-            print(f"✓ Wrote {len(rows):,} rows to {cached_headers_file} in {end_time - start_time:.4f} seconds")
-            
-            print(f"\nInserting headers into database...")
-            start_time = time.time()
-            upsert_headers(conn, group, rows)
-            end_time = time.time()
-            print(f"✓ Upserted {len(rows):,} headers into {db_path} in {end_time - start_time:.4f} seconds")
+            print(f" Backed up in-memory DB to disk DB in {end_time - start_time:.4f} seconds")
         else:
             print("\nNo new headers to process.")
-        
-        conn.close()
-        print(f"\n✓ Completed processing for {group}")
+
+        conn_mem.close()
+        print(f"\n Completed processing for {group}")
