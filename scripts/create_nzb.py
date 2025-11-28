@@ -24,7 +24,7 @@ def main():
         group = group.strip()
         print(f"\nProcessing: {group}")
         
-        db_path = ":memory:"
+        db_path = f"{DB_BASE_PATH}/{group}.sqlite"
         
         if group_by_collection:
             # Create separate NZBs grouped by poster and collection
