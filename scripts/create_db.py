@@ -106,53 +106,53 @@ if __name__ == '__main__':
 
         # Check if there's anything to fetch
         if local_min > local_max:
-            print(f"\n Database is up to date. No new articles to fetch.")
-            conn_mem.close()
+            print("\nDatabase is up to date. No new articles to fetch.")
+            conn.close()
             continue
 
         total_to_fetch = local_max - local_min + 1
         print(f"\nArticle range to fetch: {local_min:,} to {local_max:,}")
         print(f"Total headers to retrieve: {total_to_fetch:,}")
-        print(f"Starting parallel fetch...\n")
+        print("Starting parallel fetch...\n")
 
-        start_time = time.time()
+        fetch_start = time.time()
         rows = fetch_headers_chunked(
             config=config,
-            if rows:
-                cached_headers_file = f"{ARCHIVE_ROWS_PATH_BASE}/{group}.json"
-                os.makedirs(ARCHIVE_ROWS_PATH_BASE, exist_ok=True)
+            group=group,
+            start=local_max,
+            back_filled_up_to=local_min
+        )
+        fetch_elapsed = time.time() - fetch_start
+        print(f"\u2713 Retrieved {len(rows):,} headers in {fetch_elapsed:.4f} seconds")
 
-                print(f"\nArchiving headers to JSON...")
-                start_time = time.time()
-                with open(cached_headers_file, "wb") as f:  # Open in binary mode for orjson
-                    f.write(b'\n'.join(orjson.dumps(row) for row in rows))
-                    f.write(b'\n')
-                end_time = time.time()
-                print(f"\u2713 Wrote {len(rows):,} rows to {cached_headers_file} in {end_time - start_time:.4f} seconds")
+        if rows:
+            cached_headers_file = f"{ARCHIVE_ROWS_PATH_BASE}/{group}.json"
+            os.makedirs(ARCHIVE_ROWS_PATH_BASE, exist_ok=True)
 
-                print(f"\nInserting headers into database...")
-                start_time = time.time()
-                upsert_headers(conn, group, rows)
-                end_time = time.time()
-                print(f"\u2713 Upserted {len(rows):,} headers into DB in {end_time - start_time:.4f} seconds")
-
-                if not disk_db_exists:
-                    print(f"\nBacking up in-memory DB to disk DB at {db_path}...")
-                    start_time = time.time()
-                    conn_disk = sqlite3.connect(db_path)
-                    conn.backup(conn_disk)
-                    conn_disk.close()
-                    end_time = time.time()
-                    print(f"\u2713 Backed up in-memory DB to disk DB in {end_time - start_time:.4f} seconds")
-            else:
-                print("\nNo new headers to process.")
-
-            conn.close()
-            print(f"\n\u2713 Completed processing for {group}")
+            print("\nArchiving headers to JSON...")
+            start_time = time.time()
+            with open(cached_headers_file, "wb") as f:  # Open in binary mode for orjson
+                f.write(b'\n'.join(orjson.dumps(row) for row in rows))
+                f.write(b'\n')
             end_time = time.time()
-            print(f" Backed up in-memory DB to disk DB in {end_time - start_time:.4f} seconds")
+            print(f"\u2713 Wrote {len(rows):,} rows to {cached_headers_file} in {end_time - start_time:.4f} seconds")
+
+            print("\nInserting headers into database...")
+            start_time = time.time()
+            upsert_headers(conn, group, rows)
+            end_time = time.time()
+            print(f"\u2713 Upserted {len(rows):,} headers into DB in {end_time - start_time:.4f} seconds")
+
+            if not disk_db_exists:
+                print(f"\nBacking up in-memory DB to disk DB at {db_path}...")
+                start_time = time.time()
+                conn_disk = sqlite3.connect(db_path)
+                conn.backup(conn_disk)
+                conn_disk.close()
+                end_time = time.time()
+                print(f"\u2713 Backed up in-memory DB to disk DB in {end_time - start_time:.4f} seconds")
         else:
             print("\nNo new headers to process.")
 
-        conn_mem.close()
-        print(f"\n Completed processing for {group}")
+        conn.close()
+        print(f"\n\u2713 Completed processing for {group}")
