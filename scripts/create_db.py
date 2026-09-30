@@ -93,7 +93,7 @@ if __name__ == '__main__':
         # Get server's current article range
         print("Connecting to NNTP server to check available articles...")
         temp_client = get_nntp_client(config)
-        server_max, server_min = temp_client.group(group)[1:3]
+        _, _, server_min, server_max, _ = temp_client.group(group)
         temp_client.quit()
         print(f"Server article range: {server_min:,} to {server_max:,}")
 

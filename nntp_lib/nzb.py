@@ -146,6 +146,9 @@ def build_nzb_xml(groups_dict: dict, singles: list[dict], group_name: str,
                 "number": str(part_num)  # Use actual part number from subject
             }).text = message_id_text(r["message_id"])
     
+    return _serialize_nzb(root)
+
+def _serialize_nzb(root: ET.Element) -> str:
     xml_str = ET.tostring(root, encoding='unicode')
     dom = minidom.parseString(xml_str)
     pretty = dom.toprettyxml(indent="  ")
@@ -153,6 +156,117 @@ def build_nzb_xml(groups_dict: dict, singles: list[dict], group_name: str,
     lines = pretty.split('\n')
     lines.insert(1, '<!DOCTYPE nzb PUBLIC "-//newzbin//DTD NZB 1.1//EN" "http://www.newzbin.com/DTD/nzb/nzb-1.1.dtd">')
     return '\n'.join(lines)
+
+def _batch_filename(root: ET.Element, group: str, used_names: set,
+                    collection_counts=None) -> str:
+    from .utils import normalize_subject_for_grouping, sanitize_filename
+
+    counts = {}
+    for file in root.findall('file'):
+        subject = file.get('subject', '')
+        name = normalize_subject_for_grouping(subject) or subject
+        name = sanitize_filename(name).strip(' _')
+        if name:
+            counts[name] = counts.get(name, 0) + len(file.findall('segments/segment'))
+
+    if collection_counts is not None:
+        counts = collection_counts
+    # Name the output after the collection contributing the most segments.
+    names = sorted(counts, key=lambda name: (-counts[name], name))
+    label = sanitize_filename(names[0]).strip(' _') if names else ''
+    label = label.encode('utf-8')[:140].decode('utf-8', 'ignore').rstrip(' .')
+    group_label = sanitize_filename(group).encode('utf-8')[:60].decode('utf-8', 'ignore')
+    prefix = f'{label}_{group_label}' if label else group_label
+    filename = f'{prefix}.nzb'
+    suffix = 2
+    while filename in used_names:
+        filename = f'{prefix}_{suffix}.nzb'
+        suffix += 1
+    used_names.add(filename)
+    return filename
+
+
+def _batch_nzbs(nzbs: list[tuple[str, str]], group: str,
+                min_articles: int) -> list[tuple[str, str]]:
+
+    if min_articles <= 1:
+        return nzbs
+
+    namespace = '{http://www.newzbin.com/DTD/2003/nzb}'
+    results = []
+    used_names = set()
+    root = ET.Element('nzb', xmlns=namespace[1:-1])
+    article_count = 0
+    for _, xml in nzbs:
+        collection = ET.fromstring(xml)
+        files = collection.findall(f'{namespace}file')
+        article_count += sum(len(file.findall(f'{namespace}segments/{namespace}segment'))
+                             for file in files)
+        # Merge rendered files, preserving segment numbering and completeness filtering.
+        for file in files:
+            for element in file.iter():
+                element.tag = element.tag.removeprefix(namespace)
+            root.append(file)
+        if article_count >= min_articles:
+            filename = _batch_filename(root, group, used_names)
+            results.append((filename, _serialize_nzb(root)))
+            root = ET.Element('nzb', xmlns=namespace[1:-1])
+            article_count = 0
+
+    if len(root):
+        filename = _batch_filename(root, group, used_names)
+        results.append((filename, _serialize_nzb(root)))
+    return results
+
+def _batch_fuzzy_nzbs(collections, group, minimum):
+    """Fill batches from one poster, nearest to a fixed cleaned-name anchor.
+
+    Input entries are (poster, name, known timestamps, rendered XML). Count only
+    emitted segments, retain whole collections, and keep known batch dates within
+    48 hours. The similarity threshold controls initial grouping, not batching.
+    """
+    from collections import defaultdict
+    from .collection_matching import levenshtein
+
+    namespace = '{http://www.newzbin.com/DTD/2003/nzb}'
+    posters = defaultdict(list)
+    for poster, name, dates, xml in collections:
+        root = ET.fromstring(xml)
+        for element in root.iter():
+            element.tag = element.tag.removeprefix(namespace)
+        count = len(root.findall('file/segments/segment'))
+        posters[poster].append((name, dates, root, count))
+
+    results = []
+    used_names = set()
+    for poster in sorted(posters):
+        pending = sorted(posters[poster], key=lambda entry: entry[0])
+        while pending:
+            anchor, dates, root, count = pending.pop(0)
+            collection_counts = {anchor: count}
+            dates = list(dates)
+            # Compare every candidate with this batch's original anchor.
+            ranked = sorted(range(len(pending)), key=lambda i: (
+                levenshtein(anchor, pending[i][0]), pending[i][0], i)) if count < minimum else []
+            selected = set()
+            for i in ranked:
+                if count >= minimum:
+                    break
+                candidate_name, candidate_dates, candidate_root, candidate_count = pending[i]
+                combined_dates = dates + list(candidate_dates)
+                if combined_dates and max(combined_dates) - min(combined_dates) > 48 * 3600:
+                    continue
+                root.extend(candidate_root.findall('file'))
+                count += candidate_count
+                collection_counts[candidate_name] = collection_counts.get(candidate_name, 0) + candidate_count
+                dates = combined_dates
+                selected.add(i)
+            pending = [entry for i, entry in enumerate(pending) if i not in selected]
+            root.set('xmlns', namespace[1:-1])
+            results.append((_batch_filename(root, group, used_names, collection_counts),
+                            _serialize_nzb(root)))
+    return results
+
 
 def create_nzb_from_db(db_path: str, group: str,
                        subject_like: str = None,
@@ -232,12 +346,25 @@ def create_nzb_from_db(db_path: str, group: str,
 def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
                                 subject_like: str = None, from_like: str = None,
                                 not_subject: str = None, not_from: str = None,
-                                require_complete_sets: bool = False) -> list[tuple[str, str]]:
+                                require_complete_sets: bool = False,
+                                min_articles_per_nzb: int = 1,
+                                fuzzy_grouping: bool = False,
+                                fuzzy_similarity_threshold: float = 80) -> list[tuple[str, str]]:
     """Create separate NZB files grouped by poster and collection name.
     
+    Collections accumulate until the minimum number of emitted article segments
+    is reached. Collections are never split; the final remainder is also saved.
+    With fuzzy_grouping, batch nearest collection names within the same poster
+    and 48-hour window after rendering and completeness filtering.
+
     Returns:
         List of (filename, nzb_xml) tuples for created NZBs
     """
+    if min_articles_per_nzb < 1:
+        raise ValueError('min_articles_per_nzb must be at least 1')
+    if not 0 <= fuzzy_similarity_threshold <= 100:
+        raise ValueError('fuzzy_similarity_threshold must be between 0 and 100')
+
     from collections import defaultdict
     from .utils import normalize_subject_for_grouping, sanitize_filename
     
@@ -313,20 +440,25 @@ def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
     # Group by poster and normalized collection name
     collections = defaultdict(list)
     
-    for row in rows:
-        poster = row['from_addr']
-        normalized = normalize_subject_for_grouping(row['subject'], subject_like)
-        key = (poster, normalized)
-        collections[key].append(row)
-    
-    print(f"Grouped into {len(collections)} collections")
+    if fuzzy_grouping:
+        from .collection_matching import match_collections
+        collection_items = match_collections(rows, fuzzy_similarity_threshold)
+    else:
+        for row in rows:
+            poster = row['from_addr']
+            normalized = normalize_subject_for_grouping(row['subject'], subject_like)
+            collections[(poster, normalized)].append(row)
+        collection_items = list(collections.items())
+
+    print(f"Grouped into {len(collection_items)} collections")
     
     # Create NZB for each collection
     results = []
+    fuzzy_batches = []
     filename_counts = defaultdict(int)
     skipped_count = 0
     
-    for (poster, collection_name), articles in collections.items():
+    for (poster, collection_name), articles in collection_items:
         # Group articles within this collection
         groups_dict, singles = group_rows_auto(articles)
         
@@ -355,9 +487,19 @@ def create_grouped_nzbs_from_db(db_path: str, group: str, output_path: str,
             filename = f"{base_filename}.nzb"
         
         results.append((filename, nzb_xml))
-        print(f"  Created: {filename} ({len(articles)} articles)")
+        if fuzzy_grouping and min_articles_per_nzb > 1:
+            from .collection_matching import _timestamp
+            dates = [date for article in articles
+                     if (date := _timestamp(article.get('date_utc'))) is not None]
+            fuzzy_batches.append((poster, collection_name, dates, nzb_xml))
+        if min_articles_per_nzb == 1:
+            print(f"  Created: {filename} ({len(articles)} articles)")
     
     if skipped_count > 0:
         print(f"\nSkipped {skipped_count} collections (empty or all incomplete sets)")
+    if fuzzy_grouping and min_articles_per_nzb > 1:
+        results = _batch_fuzzy_nzbs(fuzzy_batches, group, min_articles_per_nzb)
+    elif not fuzzy_grouping:
+        results = _batch_nzbs(results, group, min_articles_per_nzb)
     print(f"\nTotal NZBs created: {len(results)}")
     return results

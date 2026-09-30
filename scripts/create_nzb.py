@@ -17,6 +17,11 @@ def main():
     not_from = config.get('filters', 'not_from', fallback=None)
     require_complete = config.getboolean('nzb', 'require_complete_sets', fallback=False)
     group_by_collection = config.getboolean('nzb', 'group_by_collection', fallback=False)
+    fuzzy_grouping = config.getboolean('nzb', 'fuzzy_grouping', fallback=True)
+    fuzzy_similarity_threshold = config.getfloat('nzb', 'fuzzy_similarity_threshold', fallback=80)
+    min_articles = config.getint('nzb', 'min_articles_per_nzb', fallback=20)
+    if min_articles < 1:
+        raise ValueError('min_articles_per_nzb must be at least 1')
     
     Path(NZB_OUTPUT_PATH).mkdir(parents=True, exist_ok=True)
     
@@ -36,7 +41,10 @@ def main():
                 from_like=from_like,
                 not_subject=not_subject,
                 not_from=not_from,
-                require_complete_sets=require_complete
+                require_complete_sets=require_complete,
+                min_articles_per_nzb=min_articles,
+                fuzzy_grouping=fuzzy_grouping,
+                fuzzy_similarity_threshold=fuzzy_similarity_threshold
             )
             
             # Write all NZBs to disk
