@@ -4,7 +4,10 @@ port = 563
 timeout = 60
 username = your_username
 password = your_password
+# Maximum workers and simultaneous NNTP connections
 max_workers = 10
+# Optional: processes enables CPU parallelism but adds result-transfer overhead
+fetch_backend = threads
 ssl = 1
 
 [db]
@@ -40,6 +43,14 @@ output_path = /tmp/nntp-index/nzbs
 require_complete_sets = false
 ; Group articles by poster and collection name (creates separate NZB per collection)
 group_by_collection = true
+; Match cleaned filenames, then batch nearest names from the same poster.
+fuzzy_grouping = true
+; Filename similarity percentage (0-100); lower values match more names.
+fuzzy_similarity_threshold = 80
+; Fuzzy batches keep the same poster and a 48-hour window of known dates.
+; Combine collections until this many article segments are included (1 disables).
+; Multipart files stay intact; a final smaller batch is also saved.
+min_articles_per_nzb = 20
 
 [debug]
 DEBUG = false
